@@ -1,12 +1,17 @@
 {
   "name": "pactumjs-test",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "PactumJS learning project with a provider and consumer service",
   "scripts": {
+    "start:provider": "node src/provider",
+    "start:consumer": "node src/consumer",
+    "start": "concurrently -n provider,consumer -c blue,green \"npm:start:provider\" \"npm:start:consumer\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }
