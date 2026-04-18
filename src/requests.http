@@ -1,0 +1,112 @@
+@host-provider = http://localhost:3001
+@host-consumer = http://localhost:3002
+
+### PROVIDER: health
+GET {{host-provider}}/health HTTP/1.1
+
+### PROVIDER: list products
+GET {{host-provider}}/api/products HTTP/1.1
+
+### PROVIDER: get product by id
+GET {{host-provider}}/api/products/1 HTTP/1.1
+
+### PROVIDER: get product not found
+GET {{host-provider}}/api/products/999 HTTP/1.1
+
+### PROVIDER: create product
+POST {{host-provider}}/api/products HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Webcam",
+  "price": 79.99,
+  "stock": 15
+}
+
+### PROVIDER: create product - invalid payload
+POST {{host-provider}}/api/products HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Broken"
+}
+
+### PROVIDER: adjust stock (increment)
+PATCH {{host-provider}}/api/products/1/stock HTTP/1.1
+Content-Type: application/json
+
+{
+  "delta": 5
+}
+
+### PROVIDER: adjust stock (decrement)
+PATCH {{host-provider}}/api/products/2/stock HTTP/1.1
+Content-Type: application/json
+
+{
+  "delta": -1
+}
+
+### PROVIDER: adjust stock - insufficient
+PATCH {{host-provider}}/api/products/3/stock HTTP/1.1
+Content-Type: application/json
+
+{
+  "delta": -999
+}
+
+### PROVIDER: get user by id
+GET {{host-provider}}/api/users/1 HTTP/1.1
+
+### PROVIDER: get user not found
+GET {{host-provider}}/api/users/999 HTTP/1.1
+
+### CONSUMER: health
+GET {{host-consumer}}/health HTTP/1.1
+
+### CONSUMER: list orders
+GET {{host-consumer}}/api/orders HTTP/1.1
+
+### CONSUMER: get order by id
+GET {{host-consumer}}/api/orders/1 HTTP/1.1
+
+### CONSUMER: create order
+POST {{host-consumer}}/api/orders HTTP/1.1
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "productId": 2,
+  "quantity": 3
+}
+
+### CONSUMER: create order - missing fields
+POST {{host-consumer}}/api/orders HTTP/1.1
+Content-Type: application/json
+
+{
+  "userId": 1
+}
+
+### CONSUMER: create order - unknown user
+POST {{host-consumer}}/api/orders HTTP/1.1
+Content-Type: application/json
+
+{
+  "userId": 999,
+  "productId": 1,
+  "quantity": 1
+}
+
+### CONSUMER: create order - insufficient stock
+POST {{host-consumer}}/api/orders HTTP/1.1
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "productId": 3,
+  "quantity": 9999
+}
+
+### CONSUMER: delete order
+DELETE {{host-consumer}}/api/orders/1 HTTP/1.1
