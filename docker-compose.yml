@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  flows:
+    image: pactumjs/flows:latest
+    container_name: pactumjs-flow
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=mongo
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:4.2.12
+    container_name: pactumjs-mongo
+    ports:
+      - "27017:27017"
