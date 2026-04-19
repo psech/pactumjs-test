@@ -21,6 +21,7 @@ pf.config.password = process.env.FLOW_PASSWORD ?? 'admin';
 
 const providerApp = requireCjs('../../../src/provider/index.js');
 const providerServer = providerApp.listen(PROVIDER_PORT);
+console.log(`[contract:provider] provider listening on :${PROVIDER_PORT}`);
 
 request.setDefaultTimeout(5000);
 

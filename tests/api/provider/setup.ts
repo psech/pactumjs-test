@@ -12,6 +12,7 @@ process.env.PROVIDER_PORT = String(PROVIDER_PORT);
 
 const providerApp = requireCjs('../../../src/provider/index.js');
 const providerServer = providerApp.listen(PROVIDER_PORT);
+console.log(`[api:provider] provider listening on :${PROVIDER_PORT}`);
 
 request.setDefaultTimeout(5000);
 

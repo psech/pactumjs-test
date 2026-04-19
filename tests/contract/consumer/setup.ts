@@ -23,9 +23,11 @@ pf.config.username = process.env.FLOW_USERNAME ?? 'admin';
 pf.config.password = process.env.FLOW_PASSWORD ?? 'admin';
 
 await mock.start(MOCK_PORT);
+console.log(`[contract:consumer] provider mock listening on :${MOCK_PORT}`);
 
 const consumerApp = requireCjs('../../../src/consumer/index.js');
 const consumerServer = consumerApp.listen(CONSUMER_PORT);
+console.log(`[contract:consumer] consumer listening on :${CONSUMER_PORT}`);
 
 request.setDefaultTimeout(5000);
 

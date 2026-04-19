@@ -12,10 +12,12 @@ process.env.PROVIDER_URL = `http://localhost:${MOCK_PORT}`;
 process.env.CONSUMER_PORT = String(CONSUMER_PORT);
 
 await mock.start(MOCK_PORT);
+console.log(`[api:consumer] provider mock listening on :${MOCK_PORT}`);
 
 const requireCjs = createRequire(import.meta.url);
 const consumerApp = requireCjs('../../../src/consumer/index.js');
 const consumerServer = consumerApp.listen(CONSUMER_PORT);
+console.log(`[api:consumer] consumer listening on :${CONSUMER_PORT}`);
 
 request.setDefaultTimeout(5000);
 
