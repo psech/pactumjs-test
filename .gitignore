@@ -1,1 +1,4 @@
 node_modules
+.pactum/
+coverage/
+reports/

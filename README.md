@@ -15,31 +15,28 @@ A learning sandbox for [PactumJS](https://pactumjs.github.io/) — API, integrat
 
 - **provider** ([src/provider/index.js](src/provider/index.js)) — owns products and users. In-memory data.
 - **consumer** ([src/consumer/index.js](src/consumer/index.js)) — owns orders. To create an order it calls the provider to look up the user, look up the product, and decrement stock.
+- Both services emit structured request/response logs and the consumer logs outbound provider calls.
 
 ## Prerequisites
 
-- Node.js 18+ (the consumer uses global `fetch`)
+- Node.js **24.15** (see [.nvmrc](.nvmrc)) — tests are written in TypeScript and rely on Node's built-in type stripping, so no transpiler is needed.
 - npm
+- Docker (only for contract publishing via the Flows server)
 
 ## Install
 
 ```bash
+nvm use
 npm install
 ```
 
-## Run
-
-Start both services together:
+## Run the services
 
 ```bash
-npm start
-```
-
-Or individually in separate terminals:
-
-```bash
-npm run start:provider   # http://localhost:3001
-npm run start:consumer   # http://localhost:3002
+npm start                 # both services with concurrently
+# or
+npm run start:provider    # http://localhost:3001
+npm run start:consumer    # http://localhost:3002
 ```
 
 Environment overrides:
@@ -71,42 +68,108 @@ Environment overrides:
 | POST   | `/api/orders`       | Create order `{userId, productId, quantity}`     |
 | DELETE | `/api/orders/:id`   | Delete order                                     |
 
-## Quick smoke test
+A handful of ready-to-fire requests lives in [src/requests.http](src/requests.http) (works with the VS Code REST Client).
 
-```bash
-# list products (provider)
-curl http://localhost:3001/api/products
+## Tests
 
-# create an order (consumer → provider)
-curl -X POST http://localhost:3002/api/orders \
-  -H 'content-type: application/json' \
-  -d '{"userId":1,"productId":2,"quantity":3}'
+The suite is split into four independent layers matching the test pyramid. Consumer and provider trees are kept **convention-separate** (no cross-imports) so either could lift into its own repo unchanged.
+
+```
+tests/
+  package.json              # { "type": "module" } — scopes ESM to tests/
+  api/
+    provider/               # hits provider directly, no mocks
+    consumer/               # boots pactum.mock + consumer in-process
+  contract/
+    provider/               # pactum flow() → publishes actual behaviour
+    consumer/               # interactions → publishes assumed behaviour
+  integration/              # chained calls across both services
+  e2e/                      # e2e()/step()/clean() user journeys
 ```
 
-## Optional: PactumJS Flows UI
+Each suite owns its own `setup.ts` and is gated by a dedicated npm script.
 
-[docker-compose.yml](docker-compose.yml) runs the PactumJS Flows dashboard (MongoDB-backed) for visualising test flows:
+### Scripts → pipeline stages
+
+| Script                       | What it does                                                       | Stage in the pipeline                  |
+| ---------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| `npm run test:api:provider`  | Runs against the provider on `:3001`                               | **1a** API (parallel)                  |
+| `npm run test:api:consumer`  | Boots `pactum.mock` on `:3101` and the consumer on `:3102` in-process; real provider off | **1b** API (parallel)                  |
+| `npm run test:contract:consumer` | Exercises the consumer against a mock provider; publishes assumed interactions to the Flows server (if `FLOW_SERVER_URL` is set) | **2** Contract — consumer             |
+| `npm run test:contract:provider` | Runs `flow()`-wrapped specs against the provider; publishes actual flows (if `FLOW_SERVER_URL` is set) | **3** Contract — provider             |
+| `npm run test:integration`   | Expects both services running; exercises multi-step chains         | **5** Integration (post-deploy)       |
+| `npm run test:e2e`           | Expects both services running; user journey with LIFO cleanup      | **6** E2E (post-deploy)               |
+
+### TypeScript without transpilers
+
+All tests are plain `.ts` files. Node 24's built-in type stripping runs them directly — no `ts-node`, `tsx`, or `tsc` build step. Only type-erasable syntax is allowed (no `enum`, `namespace`, parameter properties, or legacy decorators); the root [tsconfig.json](tsconfig.json) sets `erasableSyntaxOnly: true` so the editor/type-checker rejects anything Node can't handle.
+
+`tests/package.json` marks the test tree as ESM so we can use `import` syntax without switching the root package to modules (keeps `src/` as CommonJS).
+
+### Data management
+
+Every setup file registers [data maps and templates](https://pactumjs.github.io/guides/data-management.html) via `stash.addDataMap` / `stash.addDataTemplate`. Tests then reference them with `$M{...}` (map lookups), `$S{...}` (stored values), and `@DATA:TEMPLATE@` + `@OVERRIDES@` in request bodies. This keeps host URLs, seed users/products, and request skeletons out of test bodies.
+
+### Mocking
+
+- **api:consumer** — the real provider is **off**. `setup.ts` starts `pactum.mock` on `:3101`, imports the consumer Express app, and starts it on `:3102` pointed at the mock. Tests register interactions per-case with `mock.addInteraction(...)` and clear them in `beforeEach`/`afterEach`.
+- **api:provider** — no mocks (the provider has no outbound calls).
+- **contract** — no counterpart runs; each side publishes its half of the contract independently.
+- **integration / e2e** — nothing internal is mocked.
+
+## Contract publishing via the Flows server
+
+[docker-compose.yml](docker-compose.yml) runs the PactumJS Flows dashboard (MongoDB-backed).
 
 ```bash
-docker compose up
+npm run flow-server:up      # starts flows + mongo (detached)
 # open http://localhost:8080
+npm run flow-server:down
 ```
+
+To publish contracts, set the env vars expected by [pactum-flow-plugin](https://github.com/pactumjs/pactum-flow-plugin):
+
+```bash
+FLOW_SERVER_URL=http://localhost:8080 BUILD_VERSION=1.0.0 npm run test:contract:consumer
+FLOW_SERVER_URL=http://localhost:8080 BUILD_VERSION=1.0.0 npm run test:contract:provider
+```
+
+Without `FLOW_SERVER_URL`, the contract suites still run the specs — they just skip the publish step (`pf.config.publish = false`).
+
+## Jenkins pipeline target
+
+```
+1. Parallel
+   1a. test:api:provider
+   1b. test:api:consumer       (provider mocked)
+2. test:contract:consumer      (publish assumed behaviour)
+3. test:contract:provider      (publish actual behaviour)
+4. deploy
+5. test:integration            (consumer + provider deployed)
+6. test:e2e                    (consumer + provider deployed)
+```
+
+Each numbered stage maps 1:1 to a script above.
 
 ## Project layout
 
 ```
 src/
-  provider/index.js   # products + users API
-  consumer/index.js   # orders API, calls provider
-tests/                # PactumJS tests (to be added)
-docker-compose.yml    # PactumJS Flows + MongoDB
+  provider/index.js       # products + users API
+  consumer/index.js       # orders API, calls provider
+  requests.http           # sample requests for REST Client
+tests/                    # see Tests section above
+docker-compose.yml        # PactumJS Flows + MongoDB
+tsconfig.json             # noEmit, erasableSyntaxOnly, strict
+.nvmrc                    # 24.15
 ```
 
-## Status
+## Notes on PactumJS's contract model
 
-Early setup. Tests will be added under [tests/](tests/) to cover the four testing styles from the PactumJS guides:
+PactumJS is **not** classic consumer-driven Pact. It's **bi-directional**:
 
-- [API testing](https://pactumjs.github.io/guides/api-testing.html)
-- [Integration testing](https://pactumjs.github.io/guides/integration-testing.html)
-- [E2E testing](https://pactumjs.github.io/guides/e2e-testing.html)
-- [Contract testing](https://pactumjs.github.io/guides/contract-testing.html)
+- The consumer publishes **assumed** interactions.
+- The provider publishes **actual** flows (recorded by `flow()` wrapping real specs).
+- The Flows server compares both and produces a compatibility matrix.
+
+Neither side "verifies the other's contract" at test time — both publish independently, and the server does the comparison asynchronously. This means the two contract suites can run in parallel; the sequencing in the Jenkins flow above is convention, not a requirement.
