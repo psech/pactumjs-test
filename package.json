@@ -14,7 +14,10 @@
     "test:integration": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/integration.junit.xml --import ./tests/integration/setup.ts 'tests/integration/**/*.test.ts'",
     "test:e2e": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/e2e.junit.xml --import ./tests/e2e/setup.ts 'tests/e2e/**/*.e2e.ts'",
     "flow-server:up": "docker compose up -d",
-    "flow-server:down": "docker compose down"
+    "flow-server:down": "docker compose down",
+    "allure:generate": "allure generate reports -o reports/allure --clean",
+    "allure:open": "allure open reports/allure",
+    "allure:serve": "allure serve reports"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -23,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "allure-commandline": "^2.38.1",
     "concurrently": "^8.2.2",
     "get-port": "^7.2.0",
     "pactum-json-reporter": "^1.0.2",

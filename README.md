@@ -113,6 +113,21 @@ Every suite writes artefacts to `reports/` (created automatically, git-ignored).
 
 The JUnit XML is consumable by Jenkins' `junit` step for trend graphs and per-test drilldown. The Pactum JSON captures full request/response payloads for each spec (useful for diagnosing failures in suites where post-mortem debugging is hardest). TAP output also streams to stdout via the `spec` reporter so console runs stay readable.
 
+#### Allure HTML report
+
+Allure ingests the existing JUnit XMLs to produce a static HTML report with suites, test history, and failure details. Requires Java on `PATH` (the `allure-commandline` npm package ships a launcher, not the JRE).
+
+```bash
+# run the suites first (they write reports/*.junit.xml)
+npm run allure:generate   # renders static HTML to reports/allure/
+npm run allure:open       # opens it in a browser (from a local web server)
+
+# or one-shot generate + watch + serve:
+npm run allure:serve
+```
+
+In Jenkins, the Allure plugin consumes `reports/` directly; CI doesn't need to run `allure:generate` itself.
+
 ### TypeScript without transpilers
 
 All tests are plain `.ts` files. Node 24's built-in type stripping runs them directly — no `ts-node`, `tsx`, or `tsc` build step. Only type-erasable syntax is allowed (no `enum`, `namespace`, parameter properties, or legacy decorators); the root [tsconfig.json](tsconfig.json) sets `erasableSyntaxOnly: true` so the editor/type-checker rejects anything Node can't handle.
