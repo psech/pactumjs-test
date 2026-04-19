@@ -16,6 +16,7 @@ A learning sandbox for [PactumJS](https://pactumjs.github.io/) — API, integrat
 - **provider** ([src/provider/index.js](src/provider/index.js)) — owns products and users. In-memory data.
 - **consumer** ([src/consumer/index.js](src/consumer/index.js)) — owns orders. To create an order it calls the provider to look up the user, look up the product, and decrement stock.
 - Both services emit structured request/response logs and the consumer logs outbound provider calls.
+- Each service carries its **own semver** in its own `package.json` ([src/consumer/package.json](src/consumer/package.json), [src/provider/package.json](src/provider/package.json)). Bump them independently (`npm version patch` inside the folder, or edit by hand) to simulate rolling one service forward without the other.
 
 ## Prerequisites
 
@@ -168,20 +169,42 @@ FLOW_SERVER_URL=http://localhost:8080 BUILD_VERSION=1.0.0 npm run test:contract:
 
 Env vars used:
 
-| Variable           | Default            | Purpose                                                          |
-| ------------------ | ------------------ | ---------------------------------------------------------------- |
-| `FLOW_SERVER_URL`  | (unset)            | Turns publishing on when set; plugin posts to this URL           |
-| `BUILD_VERSION`    | `local`            | Unique id for this analysis — use a git sha or build number in CI|
-| `FLOW_USERNAME`    | `admin`            | Login for the Flows captain API                                  |
-| `FLOW_PASSWORD`    | `admin`            | Login for the Flows captain API                                  |
+| Variable           | Default                                  | Purpose                                                              |
+| ------------------ | ---------------------------------------- | -------------------------------------------------------------------- |
+| `FLOW_SERVER_URL`  | (unset)                                  | Turns publishing on when set; plugin posts to this URL               |
+| `BUILD_VERSION`    | `version` field of the service's `package.json` | Unique id for this analysis; override in CI to add run-id/sha suffix |
+| `FLOW_USERNAME`    | `admin`                                  | Login for the Flows captain API                                      |
+| `FLOW_PASSWORD`    | `admin`                                  | Login for the Flows captain API                                      |
 
 The plugin handles the admin login itself (`POST /api/flow/captain/v1/session` with Basic auth) — you just give it credentials.
 
 Without `FLOW_SERVER_URL`, the contract suites still run the specs — they just skip the publish step (`pf.config.publish = false`).
 
-**Analysis uniqueness**: `projectId + BUILD_VERSION` identifies an analysis. Re-publishing the same pair returns `400 "Analysis already exists"`. In CI, derive `BUILD_VERSION` from `git rev-parse --short HEAD` (or `$BUILD_NUMBER`) so every build gets a fresh, traceable version.
+**Analysis uniqueness**: `projectId + BUILD_VERSION` identifies an analysis. Re-publishing the same pair returns `400 "Analysis already exists"`. Locally the suites default to the service's own semver (e.g. `consumer@0.1.0`), which means re-running against the same Flow Server fails on the second attempt. In CI, append a run-id or git sha so every build gets a fresh, traceable version — see the workflow in [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
-## Jenkins pipeline target
+## CI
+
+The repo ships a GitHub Actions workflow at [.github/workflows/ci.yml](.github/workflows/ci.yml) that mirrors the test pyramid:
+
+```
+test-api           (parallel matrix: api:provider, api:consumer)
+   ↓
+test-contract      (parallel matrix: contract:consumer, contract:provider)
+                    with `pactumjs/flows` + `mongo` as GHA service containers;
+                    BUILD_VERSION = <service-semver>+run.<run_id>.<attempt>
+   ↓
+test-system        (integration + e2e, starts provider + consumer in background,
+                    waits on /health, then runs both suites)
+   ↓
+allure             (downloads all report artifacts, generates static HTML,
+                    uploads as `allure-report` artifact)
+```
+
+Every job uploads its `reports/` directory as an artifact so the final `allure` job can aggregate them. The workflow runs on push/PR to `main` plus `workflow_dispatch`.
+
+### Jenkins pipeline target (reference)
+
+For parity with the real Jenkins stack, the same scripts line up 1:1 as:
 
 ```
 1. Parallel
@@ -194,17 +217,20 @@ Without `FLOW_SERVER_URL`, the contract suites still run the specs — they just
 6. test:e2e                    (consumer + provider deployed)
 ```
 
-Each numbered stage maps 1:1 to a script above.
-
 ## Project layout
 
 ```
 src/
-  provider/index.js       # products + users API
-  consumer/index.js       # orders API, calls provider
+  provider/
+    index.js              # products + users API
+    package.json          # { name, version } — bump independently
+  consumer/
+    index.js              # orders API, calls provider
+    package.json          # { name, version } — bump independently
   requests.http           # sample requests for REST Client
 tests/                    # see Tests section above
-docker-compose.yml        # PactumJS Flows + MongoDB
+.github/workflows/ci.yml  # GitHub Actions pipeline
+docker-compose.yml        # PactumJS Flows + MongoDB (local contract publishing)
 tsconfig.json             # noEmit, erasableSyntaxOnly, strict
 .nvmrc                    # 24.15
 ```

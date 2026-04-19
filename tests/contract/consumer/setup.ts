@@ -9,6 +9,8 @@ const pjr = requireCjs('pactum-json-reporter');
 pjr.path = 'reports';
 pjr.file = 'contract-consumer.pactum.json';
 
+const { version: consumerVersion } = requireCjs('../../../src/consumer/package.json');
+
 const { request, mock, stash, reporter } = pactum;
 
 const MOCK_PORT = await getPort({ port: 3111 });
@@ -20,7 +22,7 @@ process.env.CONSUMER_PORT = String(CONSUMER_PORT);
 pf.config.url = process.env.FLOW_SERVER_URL ?? 'http://localhost:8080';
 pf.config.projectId = 'consumer';
 pf.config.projectName = 'consumer';
-pf.config.version = process.env.BUILD_VERSION ?? 'local';
+pf.config.version = process.env.BUILD_VERSION ?? consumerVersion;
 pf.config.publish = process.env.FLOW_SERVER_URL !== undefined;
 pf.config.username = process.env.FLOW_USERNAME ?? 'admin';
 pf.config.password = process.env.FLOW_PASSWORD ?? 'admin';

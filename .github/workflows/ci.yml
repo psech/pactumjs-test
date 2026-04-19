@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-api:
+    name: api / ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [api:provider, api:consumer]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:${{ matrix.suite }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-api-${{ strategy.job-index }}
+          path: reports/
+          if-no-files-found: ignore
+
+  test-contract:
+    name: contract / ${{ matrix.suite }}
+    needs: test-api
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: contract:consumer
+            service: consumer
+          - suite: contract:provider
+            service: provider
+    services:
+      mongo:
+        image: mongo:4.2.12
+        ports:
+          - 27017:27017
+      flows:
+        image: pactumjs/flows:latest
+        env:
+          DB_HOST: mongo
+        ports:
+          - 8080:8080
+    env:
+      FLOW_SERVER_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: wait for Flow Server
+        run: |
+          for i in {1..60}; do
+            if curl -sf -o /dev/null http://localhost:8080/; then exit 0; fi
+            sleep 1
+          done
+          echo "flow-server did not become ready" >&2
+          exit 1
+      - name: set BUILD_VERSION (semver + run id)
+        run: |
+          version=$(node -p "require('./src/${{ matrix.service }}/package.json').version")
+          echo "BUILD_VERSION=${version}+run.${{ github.run_id }}.${{ github.run_attempt }}" >> "$GITHUB_ENV"
+      - run: npm run test:${{ matrix.suite }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-contract-${{ matrix.service }}
+          path: reports/
+          if-no-files-found: ignore
+
+  test-system:
+    name: integration + e2e
+    needs: test-contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: start services
+        run: |
+          nohup node src/provider > provider.log 2>&1 &
+          nohup node src/consumer > consumer.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sf http://localhost:3001/health && curl -sf http://localhost:3002/health; then exit 0; fi
+            sleep 1
+          done
+          echo "services did not become ready" >&2
+          cat provider.log consumer.log
+          exit 1
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-system
+          path: reports/
+          if-no-files-found: ignore
+
+  allure:
+    name: allure report
+    if: always()
+    needs: [test-api, test-contract, test-system]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: reports-*
+          path: reports/
+          merge-multiple: true
+      - run: npm run allure:generate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: reports/allure/
