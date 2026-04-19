@@ -21,7 +21,8 @@
     "pactum-flow-plugin": "^0.1.4"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "concurrently": "^8.2.2",
-    "@types/node": "^24.0.0"
+    "pactum-matchers": "^1.2.0"
   }
 }

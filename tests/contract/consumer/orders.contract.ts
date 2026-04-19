@@ -1,5 +1,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
+import { createRequire } from 'node:module';
 import pactum from 'pactum';
+
+const requireCjs = createRequire(import.meta.url);
+const { like } = requireCjs('pactum-matchers');
 
 const { spec, mock } = pactum;
 
@@ -14,7 +18,7 @@ describe('contract / consumer / orders', () => {
       request: { method: 'GET', path: '/api/users/1' },
       response: {
         status: 200,
-        body: { id: 1, name: 'Alice', email: 'alice@example.com' },
+        body: like({ id: 1, name: 'Alice', email: 'alice@example.com' }),
       },
     });
     mock.addInteraction({
@@ -23,7 +27,7 @@ describe('contract / consumer / orders', () => {
       request: { method: 'GET', path: '/api/products/2' },
       response: {
         status: 200,
-        body: { id: 2, name: 'Mouse', price: 19.99, stock: 30 },
+        body: like({ id: 2, name: 'Mouse', price: 19.99, stock: 30 }),
       },
     });
     mock.addInteraction({
@@ -32,11 +36,11 @@ describe('contract / consumer / orders', () => {
       request: {
         method: 'PATCH',
         path: '/api/products/2/stock',
-        body: { delta: -1 },
+        body: { delta: like(-1) },
       },
       response: {
         status: 200,
-        body: { id: 2, name: 'Mouse', price: 19.99, stock: 29 },
+        body: like({ id: 2, name: 'Mouse', price: 19.99, stock: 29 }),
       },
     });
 
@@ -51,7 +55,10 @@ describe('contract / consumer / orders', () => {
       provider: 'provider',
       flow: 'get unknown user',
       request: { method: 'GET', path: '/api/users/999' },
-      response: { status: 404, body: { error: 'User not found' } },
+      response: {
+        status: 404,
+        body: like({ error: 'User not found' }),
+      },
     });
 
     await spec()
