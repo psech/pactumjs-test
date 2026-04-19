@@ -6,12 +6,13 @@
     "start:provider": "node src/provider",
     "start:consumer": "node src/consumer",
     "start": "concurrently -n provider,consumer -c blue,green \"npm:start:provider\" \"npm:start:consumer\"",
-    "test:api:provider": "node --test --import ./tests/api/provider/setup.ts 'tests/api/provider/**/*.test.ts'",
-    "test:api:consumer": "node --test --import ./tests/api/consumer/setup.ts 'tests/api/consumer/**/*.test.ts'",
-    "test:contract:consumer": "node --test --import ./tests/contract/consumer/setup.ts 'tests/contract/consumer/**/*.contract.ts'",
-    "test:contract:provider": "node --test --import ./tests/contract/provider/setup.ts 'tests/contract/provider/**/*.flow.ts'",
-    "test:integration": "node --test --import ./tests/integration/setup.ts 'tests/integration/**/*.test.ts'",
-    "test:e2e": "node --test --import ./tests/e2e/setup.ts 'tests/e2e/**/*.e2e.ts'",
+    "reports:init": "mkdir -p reports",
+    "test:api:provider": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/api-provider.junit.xml --import ./tests/api/provider/setup.ts 'tests/api/provider/**/*.test.ts'",
+    "test:api:consumer": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/api-consumer.junit.xml --import ./tests/api/consumer/setup.ts 'tests/api/consumer/**/*.test.ts'",
+    "test:contract:consumer": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/contract-consumer.junit.xml --import ./tests/contract/consumer/setup.ts 'tests/contract/consumer/**/*.contract.ts'",
+    "test:contract:provider": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/contract-provider.junit.xml --import ./tests/contract/provider/setup.ts 'tests/contract/provider/**/*.flow.ts'",
+    "test:integration": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/integration.junit.xml --import ./tests/integration/setup.ts 'tests/integration/**/*.test.ts'",
+    "test:e2e": "npm run reports:init && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/e2e.junit.xml --import ./tests/e2e/setup.ts 'tests/e2e/**/*.e2e.ts'",
     "flow-server:up": "docker compose up -d",
     "flow-server:down": "docker compose down"
   },
@@ -24,6 +25,7 @@
     "@types/node": "^24.0.0",
     "concurrently": "^8.2.2",
     "get-port": "^7.2.0",
+    "pactum-json-reporter": "^1.0.2",
     "pactum-matchers": "^1.2.0"
   }
 }

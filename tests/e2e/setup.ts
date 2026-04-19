@@ -1,6 +1,13 @@
+import { before, after } from 'node:test';
+import { createRequire } from 'node:module';
 import pactum from 'pactum';
 
-const { request, stash } = pactum;
+const requireCjs = createRequire(import.meta.url);
+const pjr = requireCjs('pactum-json-reporter');
+pjr.path = 'reports';
+pjr.file = 'e2e.pactum.json';
+
+const { request, stash, reporter } = pactum;
 
 request.setDefaultTimeout(5000);
 
@@ -24,4 +31,12 @@ stash.addDataTemplate({
     price: 9.99,
     stock: 10,
   },
+});
+
+before(() => {
+  reporter.add(pjr);
+});
+
+after(async () => {
+  await reporter.end();
 });

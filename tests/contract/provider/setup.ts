@@ -5,6 +5,9 @@ import pactum from 'pactum';
 
 const requireCjs = createRequire(import.meta.url);
 const pf = requireCjs('pactum-flow-plugin');
+const pjr = requireCjs('pactum-json-reporter');
+pjr.path = 'reports';
+pjr.file = 'contract-provider.pactum.json';
 
 const { request, stash, reporter } = pactum;
 
@@ -40,6 +43,7 @@ stash.addDataMap({
 
 before(() => {
   reporter.add(pf.reporter);
+  reporter.add(pjr);
 });
 
 after(async () => {

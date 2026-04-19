@@ -102,6 +102,17 @@ Each suite owns its own `setup.ts` and is gated by a dedicated npm script.
 
 All four api/contract suites are **hermetic** — they boot their own service instances from `src/` via [get-port](https://www.npmjs.com/package/get-port) (preferred port, or the next free one if busy). The assigned port is logged at startup, e.g. `[api:consumer] consumer listening on :3102`. Integration and e2e suites are the only ones that require externally-running services (they target a real deployed environment).
 
+### Reports
+
+Every suite writes artefacts to `reports/` (created automatically, git-ignored).
+
+| File                                   | Producer                    | Suites                                            |
+| -------------------------------------- | --------------------------- | ------------------------------------------------- |
+| `<suite>.junit.xml`                    | Node's built-in junit reporter | all six                                        |
+| `<suite>.pactum.json`                  | `pactum-json-reporter`      | `contract:consumer`, `contract:provider`, `e2e`   |
+
+The JUnit XML is consumable by Jenkins' `junit` step for trend graphs and per-test drilldown. The Pactum JSON captures full request/response payloads for each spec (useful for diagnosing failures in suites where post-mortem debugging is hardest). TAP output also streams to stdout via the `spec` reporter so console runs stay readable.
+
 ### TypeScript without transpilers
 
 All tests are plain `.ts` files. Node 24's built-in type stripping runs them directly — no `ts-node`, `tsx`, or `tsc` build step. Only type-erasable syntax is allowed (no `enum`, `namespace`, parameter properties, or legacy decorators); the root [tsconfig.json](tsconfig.json) sets `erasableSyntaxOnly: true` so the editor/type-checker rejects anything Node can't handle.
