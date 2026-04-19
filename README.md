@@ -91,14 +91,16 @@ Each suite owns its own `setup.ts` and is gated by a dedicated npm script.
 
 ### Scripts → pipeline stages
 
-| Script                       | What it does                                                       | Stage in the pipeline                  |
-| ---------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
-| `npm run test:api:provider`  | Runs against the provider on `:3001`                               | **1a** API (parallel)                  |
-| `npm run test:api:consumer`  | Boots `pactum.mock` on `:3101` and the consumer on `:3102` in-process; real provider off | **1b** API (parallel)                  |
-| `npm run test:contract:consumer` | Exercises the consumer against a mock provider; publishes assumed interactions to the Flows server (if `FLOW_SERVER_URL` is set) | **2** Contract — consumer             |
-| `npm run test:contract:provider` | Runs `flow()`-wrapped specs against the provider; publishes actual flows (if `FLOW_SERVER_URL` is set) | **3** Contract — provider             |
-| `npm run test:integration`   | Expects both services running; exercises multi-step chains         | **5** Integration (post-deploy)       |
-| `npm run test:e2e`           | Expects both services running; user journey with LIFO cleanup      | **6** E2E (post-deploy)               |
+| Script                       | What it does                                                                                                                  | Stage in the pipeline              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `npm run test:api:provider`  | Boots the provider in-process on `:3001` (next free port if taken); no external service needed                                | **1a** API (parallel)              |
+| `npm run test:api:consumer`  | Boots `pactum.mock` on `:3101` and the consumer on `:3102` in-process (next free port each); no external service needed       | **1b** API (parallel)              |
+| `npm run test:contract:consumer` | In-process mock + consumer like api:consumer; publishes assumed interactions to the Flows server when `FLOW_SERVER_URL` set  | **2** Contract — consumer          |
+| `npm run test:contract:provider` | Boots provider in-process and records `flow()`-wrapped specs; publishes actual flows when `FLOW_SERVER_URL` set             | **3** Contract — provider          |
+| `npm run test:integration`   | Expects both services running; exercises multi-step chains                                                                    | **5** Integration (post-deploy)    |
+| `npm run test:e2e`           | Expects both services running; user journey with LIFO cleanup                                                                 | **6** E2E (post-deploy)            |
+
+All four api/contract suites are **hermetic** — they boot their own service instances from `src/` via [get-port](https://www.npmjs.com/package/get-port) (preferred port, or the next free one if busy). The assigned port is logged at startup, e.g. `[api:consumer] consumer listening on :3102`. Integration and e2e suites are the only ones that require externally-running services (they target a real deployed environment).
 
 ### TypeScript without transpilers
 
@@ -113,9 +115,13 @@ Every setup file registers [data maps and templates](https://pactumjs.github.io/
 ### Mocking
 
 - **api:consumer** — the real provider is **off**. `setup.ts` starts `pactum.mock` on `:3101`, imports the consumer Express app, and starts it on `:3102` pointed at the mock. Tests register interactions per-case with `mock.addInteraction(...)` and clear them in `beforeEach`/`afterEach`.
-- **api:provider** — no mocks (the provider has no outbound calls).
+- **api:provider** — no mocks (the provider has no outbound calls); the provider is booted in-process for the same hermetic-run reason as api:consumer.
 - **contract** — no counterpart runs; each side publishes its half of the contract independently.
 - **integration / e2e** — nothing internal is mocked.
+
+### Matchers in contract tests
+
+The consumer side uses [pactum-matchers](https://pactumjs.github.io/guides/matching.html) to keep assumed interactions from over-specifying. `like(shape)` on response bodies lets provider field values drift (different stock counts, timestamps, etc.) without breaking the contract. Matchers work inside **request body**, **query params**, **headers**, and **response body**, but **not** in paths — Pactum's mock must route inbound requests by literal path, so variable path segments should be kept concrete and aligned on both sides.
 
 ## Contract publishing via the Flows server
 
@@ -134,7 +140,20 @@ FLOW_SERVER_URL=http://localhost:8080 BUILD_VERSION=1.0.0 npm run test:contract:
 FLOW_SERVER_URL=http://localhost:8080 BUILD_VERSION=1.0.0 npm run test:contract:provider
 ```
 
+Env vars used:
+
+| Variable           | Default            | Purpose                                                          |
+| ------------------ | ------------------ | ---------------------------------------------------------------- |
+| `FLOW_SERVER_URL`  | (unset)            | Turns publishing on when set; plugin posts to this URL           |
+| `BUILD_VERSION`    | `local`            | Unique id for this analysis — use a git sha or build number in CI|
+| `FLOW_USERNAME`    | `admin`            | Login for the Flows captain API                                  |
+| `FLOW_PASSWORD`    | `admin`            | Login for the Flows captain API                                  |
+
+The plugin handles the admin login itself (`POST /api/flow/captain/v1/session` with Basic auth) — you just give it credentials.
+
 Without `FLOW_SERVER_URL`, the contract suites still run the specs — they just skip the publish step (`pf.config.publish = false`).
+
+**Analysis uniqueness**: `projectId + BUILD_VERSION` identifies an analysis. Re-publishing the same pair returns `400 "Analysis already exists"`. In CI, derive `BUILD_VERSION` from `git rev-parse --short HEAD` (or `$BUILD_NUMBER`) so every build gets a fresh, traceable version.
 
 ## Jenkins pipeline target
 
@@ -173,3 +192,9 @@ PactumJS is **not** classic consumer-driven Pact. It's **bi-directional**:
 - The Flows server compares both and produces a compatibility matrix.
 
 Neither side "verifies the other's contract" at test time — both publish independently, and the server does the comparison asynchronously. This means the two contract suites can run in parallel; the sequencing in the Jenkins flow above is convention, not a requirement.
+
+### Matching pitfalls when the Flow Server reports `compatibility failures`
+
+- The consumer's example path must be a concrete path that also occurs in the provider's recorded flow. Path matchers (regex) aren't honoured by the mock, so variable segments have to stay literal and aligned on both sides (we point both sides at the same `products.mouse.id`, for example).
+- Body matchers (`like`, `eachLike`, `regex`, `email`, `gt`...) are the right way to absorb value drift. Use them on request bodies and response bodies rather than pinning exact values.
+- Mismatches in `flow` names mean the server has nothing to compare against — keep `flow` names identical on both sides.
