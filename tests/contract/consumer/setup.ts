@@ -1,6 +1,6 @@
 import { before, after } from 'node:test';
 import { createRequire } from 'node:module';
-import { createServer } from 'node:net';
+import getPort from 'get-port';
 import pactum from 'pactum';
 
 const requireCjs = createRequire(import.meta.url);
@@ -8,19 +8,8 @@ const pf = requireCjs('pactum-flow-plugin');
 
 const { request, mock, stash, reporter } = pactum;
 
-const getFreePort = () =>
-  new Promise<number>((resolve, reject) => {
-    const srv = createServer();
-    srv.unref();
-    srv.on('error', reject);
-    srv.listen(0, () => {
-      const port = (srv.address() as { port: number }).port;
-      srv.close(() => resolve(port));
-    });
-  });
-
-const MOCK_PORT = await getFreePort();
-const CONSUMER_PORT = await getFreePort();
+const MOCK_PORT = await getPort({ port: 3111 });
+const CONSUMER_PORT = await getPort({ port: 3112 });
 
 process.env.PROVIDER_URL = `http://localhost:${MOCK_PORT}`;
 process.env.CONSUMER_PORT = String(CONSUMER_PORT);

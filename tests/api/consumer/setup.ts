@@ -1,11 +1,12 @@
 import { after } from 'node:test';
 import { createRequire } from 'node:module';
+import getPort from 'get-port';
 import pactum from 'pactum';
 
 const { request, mock, stash } = pactum;
 
-const MOCK_PORT = Number(process.env.PROVIDER_MOCK_PORT ?? 3101);
-const CONSUMER_PORT = Number(process.env.CONSUMER_PORT ?? 3102);
+const MOCK_PORT = await getPort({ port: Number(process.env.PROVIDER_MOCK_PORT ?? 3101) });
+const CONSUMER_PORT = await getPort({ port: Number(process.env.CONSUMER_PORT ?? 3102) });
 
 process.env.PROVIDER_URL = `http://localhost:${MOCK_PORT}`;
 process.env.CONSUMER_PORT = String(CONSUMER_PORT);

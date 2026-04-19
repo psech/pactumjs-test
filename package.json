@@ -23,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "concurrently": "^8.2.2",
+    "get-port": "^7.2.0",
     "pactum-matchers": "^1.2.0"
   }
 }
